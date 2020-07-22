@@ -1,0 +1,48 @@
+
+
+1. Create a windows VM
+2. mstsc to login with public ip
+3. Install Azure cli by using "https://aka.ms/installazurecliwindows"
+4. check version of powershell using (get-host) and change it into version 5.1 and above by using 
+   https://www.microsoft.com/en-us/download/details.aspx?id=54616
+5. To download visual studio code by using "https://code.visualstudio.com/download#"
+6. Install AZ by using
+  "Install-Module -Name Az -AllowClobber"
+  P.S = If any isues raises during installing module like warning 
+7.Install Microsoft Storage Explorer
+https://azure.microsoft.com/is-is/features/storage-explorer/
+
+
+[WARNING: MSG:UnableToDownload «https://go.microsoft.com/fwlink/?LinkID=627338&clcid=0x409» «»
+
+WARNING: Unable to download the list of available providers. Check your internet connection.]
+
+TRY THIS TO SOLVE IT
+   To test this :
+
+[[[1. Open Powershell (As Admin)
+
+2. [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+3. Try it again!]]]
+
+Now again try to install module command
+
+
+
+7. To login using az "az login"
+8. To connect the az account "Connect-AZAccount"
+ 
+Now Create Service Priniipal
+  *$sub=(Get-AzSubscription).Id
+  *az ad sp create-for-rbac --role="Owner" --scopes="/subscriptions/$sub"
+  *$username=" "
+  *$password=" "
+  *tenant=" "
+
+For CMD:
+az login --service-principal --username $username --password $password --tenant $tenant
+(If not working,use cmd to execute the same)
+
+Creating Using cmd prompt
+  *az ad sp create-for-rbac --role="Owner" --scopes="/subscriptions/(SUB -ID)

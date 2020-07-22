@@ -1,0 +1,476 @@
+create windows vm
+download terraform 
+save it in c drive and extract it
+save the path and provide path variable
+c://terraform -> my pc ->righgtclick- properties-enivronment variables-path=provide terraform path
+----------------------------------------------------------------------------------------------------------------------------------------------------
+For Linux
+sudo apt-get install -y unzip
+
+wget "https://releases.hashicorp.com/terraform/0.12.26/terraform_0.12.26_linux_amd64.zip"
+
+unzip terraform-> ls
+It creates the terraform file with all components in it
+
+Now creating path under vi .profile
+(add $HOME under PATH)
+PATH="$HOME:$HOME/bin........"
+
+Now do sourcing by using
+. ./.profile
+
+and then check terraform --version
+
+Terraform to interact with AZURE
+We need to give subscription details on .profile
+ARM_SUBSCRIPTION_ID=""
+ARM_CLIENT_ID=""
+ARM_CLIENT_SECRET=""
+ARM_TENANT_ID=""
+
+. ./.profile
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+For WINDOWS
+
+set ARM_SUBSCRIPTION_ID=""
+set ARM_CLIENT_ID=""
+set ARM_CLIENT_SECRET=""
+set ARM_TENANT_ID=""
+
+Copy with needed values and execute directly on powershell 
+
+OR 
+
+set path on environment variables under -my pc-properties-environment variables 
+ARM_SUBSCRIPTION_ID=""
+ARM_CLIENT_ID=""
+ARM_CLIENT_SECRET=""
+ARM_TENANT_ID=""
+
+close powershell and open it again
+
+
+Creating Terraform file(example)
+demos->demo-(create file extension by selecting VIEW->File name extension)
+->demo1.tf(text doc)
+(creating a Resource Group)
+provider "azurerm" {
+  features {}
+}
+resource "azurerm_resource_group" "demo1" {
+  name     = "testrg1trainer"
+  location = "eastus"
+}
+
+Terraform init
+terraform validate
+terraform plan
+terraform apply
+terraform destroy
+
+Once initiate .terraform would get created which contains and downloads all required plugins
+
+Terraform apply-creates the state file which contains all details about attributes.
+Terraform destroy-its destroys and create .tfstate_backup
+
+For example: If we make any changes on the resources
+Like adding tags or another resource groups
+
+tags = {
+      env = "resource-group-demo"
+  }
+
+resource "azurerm_resource_group" "demo2" {
+  name     = "testrg2trainer"
+  location = "southindia"
+}
+
+
+Now if we apply the terraform it checks the comparison or changes from the previous tfstate and do accordingly
+Terraform state is nothing but an infrastructure
+The state stored in a local file called as terraform.tfstate
+It can also stored remotely which works better in team environment called as BACKENDS
+
+
+
+WORKING ON A MULTI USER ENVIRONMENT ON SINGLE PROJECT
+SCENARIO 1:
+When 2 dev team trying to work on the same tfstate there might get concurrancy.
+For example from windows when we already created a RG and try to create a same RG from Linux it checks only the TF state and not on AZURE
+It can shows the terraform plan but it throws error if we try to apply and shows that RG is already exists
+
+
+
+On Linux:
+If we create the same tf state file from another linux machine with the same terraform name.It would validate the name but once we apply it it throwws error on it.
+So we cant do as such.
+i.e we need to bring tfstate to this location where we need to work as well
+To make it workable we need to import along with resource name and id from the tfstate we need to import and make it available to the OPS environment.
+open windows tfstate file and get the id(Azure resource id) and alone with resource name.
+
+terraform import azurerm_resource_group.demo1 "/subscriptions/e31f41da-9807-402a-bd6c-95614deec569/resourceGroups/testrg1trainer"
+
+Now if we check terraform.tfstate we can get all the detail on it.
+Now we can modify and do anything we want.To get the tf state we need to import to our location state and do any modifications.
+
+NOw if we go back to windows machine and add another vm and terraform apply we can get the changes along with the modifications done by Linux machine(another)
+And if we delete the state by terraform destroy from Linux it destroys only from its state whatever its modified and created
+
+SCENARIO2:
+workspace
+create another demo folder with provider and RG
+
+provider "azurerm" {
+  features {}
+}
+resource "azurerm_resource_group" "demo1" {
+  name     = "demorg1trainer"
+  location = "eastus"
+  tags = {
+      env = "resource-group-demo"
+  }
+}
+resource "azurerm_resource_group" "demo2" {
+  name     = "demorg2trainer"
+  location = "southindia"
+}
+
+
+create a workspace new ws1  -> terraform workspace new ws1
+to list the workspace -> terraform workspace list
+to change the workspace  ->terraform workspace select ws1
+Now change to ws1 and execute terraform init,plan and apply.You get terraform .tfstate inside the ws1.
+After change to ws2 and excute terraform apply..we get the error its already exist..i.e each workspace acts as different folders
+
+Now change to ws2 and import the state which is only one resource=> terraform import azurerm_resource_group.demo1 /subscriptions/e31f41da-9807-402a-bd6c-95614deec569/resourceGroups/demorg1trainer
+
+provider "azurerm" {
+  features {}
+}
+resource "azurerm_resource_group" "demo1" {
+  name     = "demorg1trainer"
+  location = "eastus"
+  tags = {
+      env = "resource-group-demo"
+  }
+}
+
+Now if we perform terraform destroy we get deleted only one resource group which is from ws2.
+we can use this workspace for 1.0 and another workspace for 2.0 likewise.
+
+Now we can switch to another workspace ->terraform workspace select ws1 and perform terraform destroy to delete the remainig resources.
+
+ # azurerm_resource_group.demo2 will be destroyed
+ - resource "azurerm_resource_group" "demo2" {
+     - id       = "/subscriptions/e31f41da-9807-402a-bd6c-95614deec569/resourceGroups/demorg2trainer" -> null
+     - location = "southindia" -> null
+     - name     = "demorg2trainer" -> null
+     - tags     = {} -> null
+   }
+
+Likewise we can delete which ever we want according to our needs
+
+SCENARIO3:
+REMOTE COMMON TF STATE
+BACKEND
+Now if we have systems with two different state file which they are perfoming individually,even though can import and make sync we might get issues during azure level
+
+Create a new resorce group and a new storage account
+In dev environment we usually follow this.
+when two developers work if ws1 resources works on the remote tf state which is created on storage.(maintaining the remote tf state on blob storage) 
+And another resource ws2 tries to work on remote tf state,it would throw you errors that it is locked.
+Now creating backend resource for remote tfstate
+
+provider "azurerm" {
+  version = "=2.5.0"
+  
+  features {}
+}
+terraform {
+    backend "azurerm" {
+        resource_group_name ="tfrgtrainer"
+        storage_account_name = "tfsaa1trainer"
+        container_name = "tfcon1"
+        key = "terraform.tfstate"
+    }
+}
+resource "azurerm_resource_group" "demo" {
+  name     = "demo5rg"
+    location = "centralus"
+}
+resource "azurerm_resource_group" "demo1" {
+  name     = "test5rg"
+    location = "eastus"
+}
+.tf
+Now create a demo folder on linux machine as well and paste the same tf file there as well(demo4.tf)
+
+In the sense both windows and Linux system do have the same tf file and its going to be maintain in remote and not in local.
+Now we create the remote state through windows vm and while check during apply we might get into lock and any other machine cant use while the process and once its done we can see the tfstate file in the container we created.
+NOw after this if we try with linux machine we can able to see the two resources and backend created.
+Now use terraform graph to get the details on both the machines
+
+
+VARIABLES:
+
+Instead of hardcoading the values we parametrised it by using variables.
+
+create a demo5 folder on windows vm with three tf files
+
+demo5.tf
+variables.tf
+demo5.tfvars
+
+demo5.tf
+provider "azurerm" {
+  features {}
+}
+resource "azurerm_resource_group" "demo" {
+    name     = var.rgname
+    location = "centralus"
+}
+(STRING)
+variables.tf
+variable "rgname" {
+    type= "string"
+    default = "test12345rg"
+    
+    }
+
+demo5.tfvars
+rgname= "rg10tr"
+
+terraform plan  -var-file "demo5.tfvars"
+
+Now if we apply the same for location(LIST)
+variables.tf
+variable "locname" {
+    type= list
+    default = ["westus","eastus","southindia"]
+    
+    }
+demo5.tf change the location -> location = var.locname[2]
+(MAP)
+variable "lname" {
+    type= map
+    default = {
+            "india"= "southindia"
+            "us1"= "eastus"
+            "us2"= "westus"
+    }
+    
+    }
+
+demo5.tf
+resource "azurerm_resource_group" "demo" {
+    name     = var.rgname
+    location = var.lname["us1"]
+}
+
+TO SAVE THE PLAN
+terraform plan -out="plan.out"
+
+TO APPLY THE PLAN
+terraform apply plan.out
+
+OUTPUTS
+to display the outputs
+
+provider "azurerm" {
+  features {}
+}
+resource "azurerm_resource_group" "demo" {
+    name     = var.rgname
+    location = var.lname["us1"]
+}
+
+output "id" {
+  value = azurerm_resource_group.demo.id
+}
+output "name" {
+  value = azurerm_resource_group.demo.name
+}
+
+
+The output id value gives the subscription id and output name gives value of var.rgname (i.e)
+Outputs:
+
+id = /subscriptions/e31f41da-9807-402a-bd6c-95614deec569/resourceGroups/test12345rg
+name = test12345rg 
+
+------------------------------------------------------------------------------------------------------
+DEMO6
+
+MODULES
+--------
+To use in multi structure environment
+
+create two folders -> ENV ,PARENT , and final.tf 
+in ENV create two folders -> DEV & PROD
+In Dev create dev.tf and in PROD create prod.tf
+In PARENT create -> resources.tf.variables.tf,outputs.tf
+
+variable.tf
+-----------
+variable "rgname" {
+    type= "string"
+}
+
+variable "location" {
+    type= "string"
+}
+
+-------
+main.tf
+------- 
+resource "azurerm_resource_group" "main" {
+  name     = var.rgname
+  location = var.location
+}
+
+outputs.tf
+----------
+output "name" {
+    value= "${azurerm_resource_group.main.name}"
+}
+output "location" {
+    value= "${azurerm_resource_group.main.location}"
+}
+----------------------------------------
+dev module
+-----
+module "devmodule" {
+
+     source = "../../parent"
+     rgname = "devrg1"
+     location = "southindia"
+}
+----------------------------
+prod module
+------------
+module "prodmodule" {
+
+   source = "../../parent"
+   rgname = "prodrg1"
+   location = "eastus"
+}
+-------------------------------
+final.tf
+--------
+provider "azurerm" {
+   features {}
+}
+
+module "devmodule" {
+     source = "./envs/dev"
+}
+module "prodmodule" {
+     source = "./envs/prod"
+}
+
+Interpollation -> defining the values with ${}
+------------------------------------------------
+
+Demo7
+------
+provider "azurerm" {
+  features {}
+}
+
+resource "azurerm_resource_group" "main" {
+  name     = "${var.prefix}-resources"
+  location = var.location
+}
+
+resource "azurerm_virtual_network" "main" {
+  name                = "${var.prefix}-network"
+  address_space       = ["10.0.0.0/16"]
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+}
+
+resource "azurerm_subnet" "internal" {
+  name                 = "internal"
+  resource_group_name  = azurerm_resource_group.main.name
+  virtual_network_name = azurerm_virtual_network.main.name
+  address_prefix     = "10.0.2.0/24"
+}
+
+resource "azurerm_public_ip" "main" {
+  name                = "${var.prefix}-pip"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  allocation_method   = "Dynamic"
+}
+
+resource "azurerm_network_interface" "main" {
+  name                = "${var.prefix}-nic"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = azurerm_subnet.internal.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.main.id
+  }
+}
+
+resource "azurerm_linux_virtual_machine" "main" {
+  name                            = "${var.prefix}-vm"
+  resource_group_name             = azurerm_resource_group.main.name
+  location                        = azurerm_resource_group.main.location
+  size                            = "Standard_F2"
+  admin_username                  = "adminuser"
+  admin_password                  = "P@ssw0rd1234!"
+  disable_password_authentication = false
+  network_interface_ids = [
+    azurerm_network_interface.main.id,
+  ]
+
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "UbuntuServer"
+    sku       = "16.04-LTS"
+    version   = "latest"
+  }
+
+  os_disk {
+    storage_account_type = "Standard_LRS"
+    caching              = "ReadWrite"
+  }
+
+  
+  provisioner "remote-exec" {
+  inline =[
+  "touch test.out",
+     "sudo apt-get update",
+     "sudo apt-get install -y apache2",
+     "sudo service apache2 start"
+]
+
+connection {
+  host   = self.public_ip_address
+  user   = self.admin_username
+  password = self.admin_password
+}
+}
+}
+
+
+https://techmglobal3.webex.com/techmglobal3/k2/j.php?MTID=t5a59de8f33ea7fd02d15ea9d1b68254a
+Training Name: Azure-Terraform
+Trainer: Mr.Paparao
+WebEx Link: Click Here
+Event Id: 917 333 199
+Password:1234
+from paparao to All Attendees:
+https://tfsa1trainer.blob.core.windows.net/con1/windows1.zip
+
+host     = azurerm_public_ip.example.id
+
+host     = azurerm_public_ip.example.id
+
+https://tfsa1trainer.blob.core.windows.net/con1/win-pro.zip
+
